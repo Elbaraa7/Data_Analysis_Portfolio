@@ -16,6 +16,8 @@ This folder contains SQL scripts for data cleaning and exploratory data analysis
 **Key Steps:** Aggregate data, calculate totals, explore insights.   
 **Key Skills:** Aggregations, Grouping, EDA Queries.  
 
+Data Source: https://github.com/AlexTheAnalyst/MySQL-YouTube-Series/blob/main/layoffs.csv
+
 ---
 
 ### 🧹 3. Cafe Sales Dataset Cleaning
@@ -29,3 +31,5 @@ This folder contains SQL scripts for data cleaning and exploratory data analysis
 **Goal:** Discover patterns in sales.   
 **Key Steps:** Aggregate data, calculate totals, explore insights.   
 **Key Skills:** CTEs, Aggregations, Grouping, EDA Queries.  
+
+Data Source: https://www.kaggle.com/datasets/ahmedmohamed2003/cafe-sales-dirty-data-for-cleaning-training?resource=download
