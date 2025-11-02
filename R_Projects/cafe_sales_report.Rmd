@@ -1,0 +1,274 @@
+---
+title: "Cafe Sales Data Analysis"
+author: "Elbaraa Ibrahim"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    toc: true
+    toc_float: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Cafe Sales Data Analysis
+
+## Introduction
+
+### Objective
+This report analyzes cafe sales data to uncover insights.
+
+The main goals:
+
+* Clean and standardize the raw sales data.
+
+* Explore trends across items, time, and payment methods.
+
+
+### Data Source
+https://www.kaggle.com/datasets/ahmedmohamed2003/cafe-sales-dirty-data-for-cleaning-training?resource=download
+
+## Data Preparation and Cleaning
+
+### Loading Library
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(scales)
+```
+
+### Importing Data
+
+```{R}
+# Import the data
+df <- read.csv("cafe_sales.csv", na.strings = c("", NA))
+```
+
+
+### Data Cleaning
+
+In this section, invalid entries, missing values, and inconsistent formats was handled.
+Common invalid markers include "", "ERROR", "UNKNOWN", and NA.
+
+```{R}
+# check data
+glimpse(df)
+
+# clean column names
+df_cleaned <- df |>
+  janitor::clean_names()
+
+# Check for duplicates
+df_cleaned[duplicated(df_cleaned),]
+
+# identifying invalid data 
+invalids <- c("", "ERROR", "UNKNOWN", NA)
+
+# Get the unit price for items
+df_cleaned |>
+  select(c("item", "price_per_unit")) |>
+  filter(!item %in% invalids, !price_per_unit %in% invalids) |>
+  distinct()
+
+# clean column names
+df_cleaned <- df_cleaned |>
+  mutate(
+    # Clean unit price column
+    price_per_unit = case_when(
+      !price_per_unit %in% invalids ~ as.numeric(price_per_unit),
+      price_per_unit %in% invalids & item == "Coffee" ~ 2.00,
+      price_per_unit %in% invalids & item == "Cake" ~ 3.00,
+      price_per_unit %in% invalids & item == "Cookie" ~ 1.00,
+      price_per_unit %in% invalids & item == "Salad" ~ 5.00,
+      price_per_unit %in% invalids & item == "Smoothie" ~ 4.00,
+      price_per_unit %in% invalids & item == "Sandwich" ~ 4.00,
+      price_per_unit %in% invalids & item == "Juice" ~ 3.00,
+      price_per_unit %in% invalids & item == "Tea" ~ 1.50,
+      price_per_unit %in% invalids & item %in% invalids & 
+        !total_spent %in% invalids & as.numeric(quantity) != 0 ~ 
+        round(as.numeric(total_spent) / as.numeric(quantity), 2)
+    ),
+    
+    # Clean quantity column
+    quantity = case_when(
+      !quantity %in% invalids ~ as.integer(quantity),
+      quantity %in% invalids & !total_spent %in% invalids ~ 
+        as.integer(as.numeric(total_spent) / price_per_unit),
+      TRUE ~ NA_integer_
+    ),
+    
+    # Clean total spent column
+    total_spent = case_when(
+      !total_spent %in% invalids ~ as.numeric(total_spent),
+      total_spent %in% invalids & 
+        !is.na(quantity) ~ 
+        round(price_per_unit * quantity, 2),
+      TRUE ~ NA_real_
+    ),
+    
+    # Clean item column
+    item = case_when(
+      !item %in% invalids ~ item,
+      item %in% invalids & price_per_unit == 2.00 ~ "Coffee",
+      item %in% invalids & price_per_unit == 1.00 ~ "Cookie",
+      item %in% invalids & price_per_unit == 1.50 ~ "Tea",
+      item %in% invalids & price_per_unit == 5.00 ~ "Salad",
+      TRUE ~ "UNKNOWN"
+    ),
+    
+    # Clean payment method column
+    payment_method = case_when(
+      !payment_method %in% invalids ~ payment_method,
+      TRUE ~ "UNKNOWN"
+    ),
+    
+    # Clean location column
+    location = case_when(
+      !location %in% invalids ~ location,
+      TRUE ~ "UNKNOWN"
+    ),
+    
+    # Clean date column
+    transaction_date = case_when(
+      !transaction_date %in% invalids ~ as.Date(transaction_date),
+      TRUE ~ as.Date(NA)
+    ),
+    
+    # Create month and year columns
+    month = month(transaction_date), 
+    year = year(transaction_date)
+  ) |>
+  suppressWarnings() 
+```
+
+## Exploratory Data Analysis (EDA)
+
+### Revenue by Item: Identifying Top Sellers
+```{R}
+# Revenue by item
+revenue_item <- df_cleaned |>
+  select(c("item", "total_spent")) |>
+  filter(!item %in% invalids, !total_spent %in% invalids) |>
+  group_by(item) |>
+  summarise(revenue = sum(total_spent)) |>
+  arrange(desc(revenue))
+
+# Revenue by item using Column Chart 
+ggplot(revenue_item, aes(x = reorder(item, -revenue) , y = revenue)) +
+  geom_col(aes(fill = item), show.legend = FALSE) +
+  scale_fill_viridis_d("Item") +
+  geom_text(aes(label = dollar(round(revenue, 0))), vjust = 1.5, color = "white", size = 4) +
+  labs(
+    x = "Item",
+    y = "Revenue",
+    title = "Revenue By Item"
+  ) +
+  theme_classic()
+```
+
+**Insight:** 
+
+* Items that contribute the most to revenue.
+
+### Monthly Revenue Trend
+```{R}
+# Revenue by month
+revenue_trend <- df_cleaned |>
+  select(c("month", "total_spent")) |>
+  filter(!month %in% invalids, !total_spent %in% invalids) |>
+  group_by(month) |>
+  summarise(revenue = sum(total_spent)) |>
+  arrange(desc(month))
+
+# Monthly trend for revenue using line chart
+ggplot(revenue_trend, aes(x = month, y = revenue)) +
+  scale_x_continuous(breaks=seq(0 , 12 , by = 1)) +
+  scale_y_continuous(limits = c(6000, 8000)) +
+  geom_line(
+    linetype = 1,
+    linewidth = 0.5
+  ) +
+  geom_point(
+    color = "deepskyblue4",
+    size = 2
+  ) +
+  labs(
+    y = "Revenue",
+    x = "Month",
+    title = "Monthly trend revenue"
+  ) +
+  theme_minimal()
+```
+
+**Insight:** 
+
+* Identify seasonal patterns or peak months.
+
+### Month-over-Month (MoM) Growth
+```{R}
+# Month-over-Month Revenue Growth analysis
+mom <- df_cleaned |> 
+  filter(!month %in% invalids, !total_spent %in% invalids) |>
+  group_by(month) |>
+  summarise(revenue = sum(total_spent)) |>
+  mutate(MoM = (revenue - lag(revenue)) / lag(revenue))
+
+ggplot(mom, aes(x = month, y = replace_na(MoM, 0), fill = replace_na(MoM, 0) > 0)) + 
+  geom_col(position = "dodge") +
+  scale_x_continuous(breaks=seq(1 , 12 , by = 1)) +
+  scale_y_continuous(labels = scales::percent)+
+  scale_fill_manual(values = c("FALSE" = "indianred", "TRUE" = "seagreen")) +
+  labs(
+    y = "Growth (%)",
+    x = "Month",
+    title = "Month-over-Month Revenue Growth",
+    fill = "Growth"
+  ) +
+  theme_minimal()
+```
+
+**Insight:** 
+
+* Identify whether revenue is improving, holding steady, or declining.
+
+### Revenue by Location and Payment Method
+```{R}
+# Revenue by location and payment method using bar chart
+revenue_loc <- df_cleaned |>
+  select(c("payment_method", "location" , "total_spent")) |>
+  filter(!payment_method %in% invalids,
+         !location %in% invalids,
+         !total_spent %in% invalids) |>
+  group_by(payment_method, location) |>
+  summarise(revenue = sum(total_spent)) |>
+  arrange(desc(revenue))
+
+ggplot(revenue_loc, aes(fill=payment_method, y=revenue, x=location)) + 
+  geom_bar(position="dodge", stat="identity") +
+  scale_fill_viridis_d("Payment Method") +
+  coord_flip() +
+  labs(
+    x = "Location",
+    y = "Revenue",
+    title = "Revenue By Location and Payment method"
+  ) +
+  theme_classic()
+
+```
+
+**Insight:** 
+
+* Compare how each location performs and which payment methods are most popular
+
+## Key Findings 
+
+Top Performers: `r revenue_item$item[1]` and `r revenue_item$item[2]` drive the largest share of total revenue.
+
+Seasonal Patterns: Noticeable growth during `r df_cleaned |> select(c("month", "total_spent")) |> filter(!month %in% invalids, !total_spent %in% invalids) |> group_by(month) |> summarise(revenue = sum(total_spent)) |> arrange(desc(revenue)) |> slice(1:3) |> pull(month)` months; potential successful campaigns.
+
+Payment Mix: `r revenue_loc |> group_by(payment_method) |> summarise(total_revenue = sum(revenue, na.rm = TRUE)) |> arrange(desc(total_revenue)) |> slice(1) |> pull(payment_method)` is the best payment method; consider making loyalty offers via this channel.
+
+
+
